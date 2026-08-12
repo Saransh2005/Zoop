@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+backend/venv/
+venv/
+.venv/
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# SQLite temp files
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment & OS
+.env
+.env.local
+.DS_Store
+*.log
