@@ -1082,3 +1082,118 @@ input, textarea, select { font-family: inherit; outline: none; border: none; bac
 @media (max-width: 480px) {
   .footer-main { grid-template-columns: 1fr; }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   MOBILE & TABLET RESPONSIVE STYLES
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .app-layout { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-section { display: flex; flex-direction: row; gap: 4px; }
+  .sidebar-title { display: none; }
+  .sidebar-item { padding: 6px 12px; font-size: 13px; border-radius: 20px; }
+  
+  .main-content { padding: 16px 12px; }
+  .content-body { grid-template-columns: 1fr; gap: 20px; }
+}
+
+@media (max-width: 768px) {
+  /* Navbar */
+  .navbar { padding: 0 12px; height: 56px; }
+  .nav-links { display: none; } /* Hide desktop dropdowns on mobile */
+  .nav-right { gap: 6px; }
+  .schedule-btn, .join-btn, .host-btn { padding: 5px 10px; font-size: 12px; height: 32px; }
+  
+  /* Dashboard Profile Card */
+  .profile-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    gap: 16px;
+  }
+  .profile-right {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 12px;
+  }
+  .quick-actions {
+    width: 100%;
+    justify-content: space-around;
+  }
+  .personal-meeting-id {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Action Grid */
+  .action-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* Meeting Room Header & Controls */
+  .meeting-header {
+    padding: 8px 12px;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .meeting-topic {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meeting-controls {
+    width: calc(100% - 16px);
+    max-width: 100%;
+    padding: 6px 8px;
+    gap: 4px;
+    bottom: 8px;
+    border-radius: 16px;
+  }
+  .control-btn {
+    padding: 4px 6px;
+    min-width: 44px;
+  }
+  .control-btn-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .control-btn-label {
+    font-size: 9.5px;
+  }
+
+  /* Side Panels Overlay (Chat & Participants) */
+  .side-panel {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .join-card { padding: 24px 16px; width: 92%; }
+  .profile-name { font-size: 18px; }
+  .profile-actions { flex-wrap: wrap; gap: 8px; }
+  .profile-btn { padding: 6px 12px; font-size: 12px; }
+  .action-grid { grid-template-columns: 1fr 1fr; }
+}
