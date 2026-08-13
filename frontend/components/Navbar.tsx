@@ -24,12 +24,16 @@ export default function Navbar() {
           setUser(u);
           localStorage.setItem("user", JSON.stringify(u));
         })
-        .catch(() => {
-          // Token expired or invalid
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          setUser(null);
+        .catch((err) => {
+          const isAuthError = err instanceof Error && (err.message.includes("401") || err.message.toLowerCase().includes("unauthorized") || err.message.toLowerCase().includes("not authenticated"));
+          if (isAuthError) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            setUser(null);
+          }
         });
+    } else {
+      setUser(null);
     }
   }, [pathname]);
 

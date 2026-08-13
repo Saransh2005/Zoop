@@ -41,6 +41,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     expire = datetime.utcnow() + (expires_delta or timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -60,10 +62,11 @@ def get_current_user(
 
     try:
         payload = jwt.decode(actual_token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        raw_sub = payload.get("sub")
+        if raw_sub is None:
             return None
-    except jwt.PyJWTError:
+        user_id = int(raw_sub)
+    except (jwt.PyJWTError, ValueError, TypeError):
         return None
 
     return db.query(User).filter(User.id == user_id).first()
