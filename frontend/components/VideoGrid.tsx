@@ -10,7 +10,7 @@ interface VideoGridProps {
   localStream: MediaStream | null;
   remoteStreams?: Record<string, MediaStream>;
   screenStream: MediaStream | null;
-  remoteScreenStreams?: Record<string, MediaStream>;
+  remoteScreenPresenters?: Record<string, boolean>;
 }
 
 const AVATAR_COLORS = [
@@ -44,6 +44,7 @@ function VideoTile({ name, isHost, isMuted, isCameraOn = true, isLocal, stream, 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
@@ -67,6 +68,7 @@ function VideoTile({ name, isHost, isMuted, isCameraOn = true, isLocal, stream, 
           autoPlay
           playsInline
           muted={!!isLocal}
+          onLoadedMetadata={(e) => e.currentTarget.play().catch(() => {})}
           style={{
             width: "100%",
             height: "100%",
@@ -133,8 +135,9 @@ function ScreenSharePanel({ stream, presenterName }: { stream: MediaStream; pres
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
@@ -154,6 +157,7 @@ function ScreenSharePanel({ stream, presenterName }: { stream: MediaStream; pres
         autoPlay
         playsInline
         muted={false}
+        onLoadedMetadata={(e) => e.currentTarget.play().catch(() => {})}
         style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
       />
       {/* Presenter badge */}
@@ -190,16 +194,16 @@ export default function VideoGrid({
   localStream,
   remoteStreams = {},
   screenStream,
-  remoteScreenStreams = {},
+  remoteScreenPresenters = {},
 }: VideoGridProps) {
   const others = participants.filter(
     (p) => p.display_name !== localName && p.left_at === null
   );
 
-  // Determine the active screen share: local takes priority, then first remote
-  const remoteScreenEntry = Object.entries(remoteScreenStreams)[0]; // [peerName, stream]
-  const activeScreenStream = screenStream || remoteScreenEntry?.[1] || null;
-  const activePresenterName = screenStream ? localName : remoteScreenEntry?.[0] || "";
+  // Determine the active screen share: local takes priority, then first remote presenter
+  const remotePresenterName = Object.keys(remoteScreenPresenters).find((k) => remoteScreenPresenters[k]);
+  const activePresenterName = screenStream ? localName : (remotePresenterName || "");
+  const activeScreenStream = screenStream || (remotePresenterName ? remoteStreams[remotePresenterName] : null);
 
   // ── Screen share active: LEFT large screen + RIGHT camera strip ────────────
   if (activeScreenStream) {
@@ -250,8 +254,8 @@ export default function VideoGrid({
                 name={p.display_name}
                 isMuted={p.is_muted}
                 isCameraOn={p.is_video_on}
-                stream={remoteStreams[p.display_name] || null}
                 isHost={p.is_host}
+                stream={remoteStreams[p.display_name]}
                 compact
               />
             </div>
@@ -261,12 +265,12 @@ export default function VideoGrid({
     );
   }
 
-  // ── Normal grid layout (no screen share) ───────────────────────────────────
-  const totalCount = others.length + 1;
-
-  // Calculate grid layout
-  const cols = totalCount === 1 ? 1 : totalCount <= 2 ? 2 : totalCount <= 4 ? 2 : 3;
-  const rows = Math.ceil(totalCount / cols);
+  // ── Standard Camera Grid (no screen share) ─────────────────────────
+  const total = 1 + others.length;
+  let cols = 1;
+  if (total >= 2) cols = 2;
+  if (total >= 5) cols = 3;
+  if (total >= 10) cols = 4;
 
   return (
     <div
@@ -274,11 +278,12 @@ export default function VideoGrid({
         flex: 1,
         display: "grid",
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`,
         gap: 10,
         padding: 10,
+        alignContent: "center",
+        justifyContent: "center",
+        maxHeight: "calc(100vh - 120px)",
         overflow: "hidden",
-        minHeight: 0,
       }}
     >
       <VideoTile
@@ -289,19 +294,17 @@ export default function VideoGrid({
         stream={localStream}
         isHost
       />
-      {others.map((p: Participant) => {
-        const remoteStream = remoteStreams[p.display_name];
-        return (
-          <VideoTile
-            key={p.id}
-            name={p.display_name}
-            isMuted={p.is_muted}
-            isCameraOn={p.is_video_on && !!remoteStream}
-            stream={remoteStream || null}
-            isHost={p.is_host}
-          />
-        );
-      })}
+
+      {others.map((p: Participant) => (
+        <VideoTile
+          key={p.id}
+          name={p.display_name}
+          isMuted={p.is_muted}
+          isCameraOn={p.is_video_on}
+          isHost={p.is_host}
+          stream={remoteStreams[p.display_name]}
+        />
+      ))}
     </div>
   );
 }

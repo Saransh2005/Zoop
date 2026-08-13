@@ -137,7 +137,7 @@ export default function MeetingPage() {
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Record<string, MediaStream>>({});
+  const [remoteScreenPresenters, setRemoteScreenPresenters] = useState<Record<string, boolean>>({});
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -161,21 +161,29 @@ export default function MeetingPage() {
     setTimeout(() => setToast(""), 2700);
   };
 
-  // ─── Attach Local Tracks Helper (Bug 1 Fix: use replaceTrack for stopped senders) ─────
+  // ─── Attach Local Tracks Helper (uses replaceTrack) ───────────────────────────
   const attachLocalTracks = useCallback((pc: RTCPeerConnection) => {
     if (!localStreamRef.current) return;
     const senders = pc.getSenders();
-    localStreamRef.current.getTracks().forEach((track) => {
+
+    // Use active screen track if currently sharing screen, else camera track
+    const activeVideoTrack = screenStreamRef.current
+      ? screenStreamRef.current.getVideoTracks()[0]
+      : (localStreamRef.current.getVideoTracks()[0] || null);
+
+    const audioTrack = localStreamRef.current.getAudioTracks()[0] || null;
+
+    [audioTrack, activeVideoTrack].forEach((track) => {
+      if (!track) return;
       const existingSender = senders.find((s) => s.track && s.track.kind === track.kind);
       if (existingSender) {
-        // Replace even if sender exists — the old track may be stopped
         if (existingSender.track !== track) {
-          existingSender.replaceTrack(track).catch(() => { });
+          existingSender.replaceTrack(track).catch(() => {});
         }
       } else {
         try {
           pc.addTrack(track, localStreamRef.current!);
-        } catch (e) { }
+        } catch (e) {}
       }
     });
   }, []);
@@ -254,41 +262,12 @@ export default function MeetingPage() {
       }
     };
 
-    // Handle remote track arrival — multi-fallback screen share detection
+    // Handle remote track arrival
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
-        const knownScreenStreamId = screenShareStreamIds.current[peerName];
-        const alreadyHasCameraStream = !!remoteStreamsRef.current[peerName];
-
-        const isScreenTrack =
-          (knownScreenStreamId ? stream.id === knownScreenStreamId : false) ||
-          event.track.contentHint === "detail" ||
-          /screen|window|tab/i.test(event.track.label) ||
-          (event.track.kind === "video" && alreadyHasCameraStream && stream.id !== remoteStreamsRef.current[peerName]?.id);
-
-        console.log("[ontrack]", peerName, {
-          kind: event.track.kind,
-          contentHint: event.track.contentHint,
-          label: event.track.label,
-          streamId: stream.id,
-          knownScreenId: knownScreenStreamId,
-          isScreenTrack,
-        });
-
-        if (isScreenTrack) {
-          setRemoteScreenStreams((prev) => ({ ...prev, [peerName]: stream }));
-          event.track.onended = () => {
-            setRemoteScreenStreams((prev) => {
-              const next = { ...prev };
-              delete next[peerName];
-              return next;
-            });
-          };
-        } else {
-          remoteStreamsRef.current[peerName] = stream;
-          setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
-        }
+        remoteStreamsRef.current[peerName] = stream;
+        setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
       }
     };
 
@@ -375,11 +354,9 @@ export default function MeetingPage() {
     } else if (data.type === "PARTICIPANTS_UPDATE") {
       api.getParticipants(meetingId).then(setParticipants).catch(() => { });
     } else if (data.type === "SCREEN_SHARE_STARTED") {
-      // Store stream ID so ontrack can reliably identify screen tracks from this peer
-      screenShareStreamIds.current[data.sender] = data.streamId;
+      setRemoteScreenPresenters((prev) => ({ ...prev, [data.sender]: true }));
     } else if (data.type === "SCREEN_SHARE_STOPPED") {
-      delete screenShareStreamIds.current[data.sender];
-      setRemoteScreenStreams((prev) => {
+      setRemoteScreenPresenters((prev) => {
         const next = { ...prev };
         delete next[data.sender];
         return next;
@@ -515,21 +492,26 @@ export default function MeetingPage() {
     }
   };
 
-  // ─── Real Screen Sharing ────────────────────────────────────────────────
+  // ─── Rock-Solid Screen Sharing via replaceTrack (Zero SDP Renegotiation) ─────
   const handleShareScreen = async () => {
     if (screenStream) {
       sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
-      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
-        const sender = screenSendersRef.current[peerName];
-        if (sender) {
-          try { pc.removeTrack(sender); } catch (e) { }
-          delete screenSendersRef.current[peerName];
-        }
-      });
-      screenStream.getTracks().forEach((t) => t.stop());
-      screenStreamRef.current = null;
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+      }
       setScreenStream(null);
       setIsScreenSharing(false);
+
+      // Revert back to local camera track
+      const cameraTrack = isCameraOn && localStreamRef.current ? (localStreamRef.current.getVideoTracks()[0] || null) : null;
+      Object.values(peerConnectionsRef.current).forEach((pc) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find((s) => s.track && s.track.kind === "video") || senders.find((s) => !s.track);
+        if (videoSender) {
+          videoSender.replaceTrack(cameraTrack).catch(() => {});
+        }
+      });
       showToast("Screen sharing stopped");
       return;
     }
@@ -542,34 +524,37 @@ export default function MeetingPage() {
       showToast("Screen sharing started!");
 
       const screenTrack = stream.getVideoTracks()[0];
-      screenTrack.contentHint = "detail";
 
-      // Broadcast stream ID FIRST so remote ontrack can reliably identify this stream
-      sendSignal({ type: "SCREEN_SHARE_STARTED", sender: localName, streamId: stream.id });
+      // Broadcast signal FIRST so all peers update layout
+      sendSignal({ type: "SCREEN_SHARE_STARTED", sender: localName });
 
-      // Just addTrack — onnegotiationneeded fires automatically and sends the offer
-      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
-        try {
-          const sender = pc.addTrack(screenTrack, stream);
-          screenSendersRef.current[peerName] = sender;
-        } catch (e) {
-          console.warn("[screen share] addTrack failed for", peerName, e);
+      // Swap camera video track with screen track on ALL existing peer connections — 0 renegotiation needed!
+      Object.values(peerConnectionsRef.current).forEach((pc) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find((s) => s.track && s.track.kind === "video") || senders.find((s) => !s.track);
+        if (videoSender) {
+          videoSender.replaceTrack(screenTrack).catch((e) => console.warn("screen replaceTrack error", e));
         }
       });
 
-      // Auto-cleanup when user clicks browser "Stop sharing" button
+      // Auto-cleanup when user clicks browser's native "Stop sharing" button
       screenTrack.onended = () => {
         sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
-        Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
-          const sender = screenSendersRef.current[peerName];
-          if (sender) {
-            try { pc.removeTrack(sender); } catch (e) { }
-            delete screenSendersRef.current[peerName];
-          }
-        });
-        screenStreamRef.current = null;
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach((t) => t.stop());
+          screenStreamRef.current = null;
+        }
         setScreenStream(null);
         setIsScreenSharing(false);
+
+        const cameraTrack = isCameraOn && localStreamRef.current ? (localStreamRef.current.getVideoTracks()[0] || null) : null;
+        Object.values(peerConnectionsRef.current).forEach((pc) => {
+          const senders = pc.getSenders();
+          const videoSender = senders.find((s) => s.track && s.track.kind === "video") || senders.find((s) => !s.track);
+          if (videoSender) {
+            videoSender.replaceTrack(cameraTrack).catch(() => {});
+          }
+        });
         showToast("Screen sharing ended");
       };
     } catch (err) {
@@ -738,7 +723,7 @@ export default function MeetingPage() {
             localStream={localStream}
             remoteStreams={remoteStreams}
             screenStream={screenStream}
-            remoteScreenStreams={remoteScreenStreams}
+            remoteScreenPresenters={remoteScreenPresenters}
           />
 
           {/* Controls */}
