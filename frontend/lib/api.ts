@@ -99,7 +99,7 @@ export const api = {
   getRecent: (limit = 10) => request<Meeting[]>(`/api/meetings/recent?limit=${limit}`),
   getMeeting: (id: string) => request<Meeting>(`/api/meetings/${id}`),
 
-  createInstantMeeting: (title = "Instant Meeting", hostName = "Saransh Singh") =>
+  createInstantMeeting: (title = "Instant Meeting", hostName = "Host") =>
     request<Meeting>("/api/meetings", {
       method: "POST",
       body: JSON.stringify({ title, host_name: hostName, duration_minutes: 60 }),

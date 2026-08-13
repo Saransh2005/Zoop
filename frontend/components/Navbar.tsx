@@ -25,11 +25,12 @@ export default function Navbar() {
           localStorage.setItem("user", JSON.stringify(u));
         })
         .catch(() => {
-          // Token expired or invalid
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           setUser(null);
         });
+    } else {
+      setUser(null);
     }
   }, [pathname]);
 
@@ -37,10 +38,14 @@ export default function Navbar() {
   if (pathname?.startsWith("/meeting/")) return null;
 
   const handleHost = async () => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
     setCreating(true);
-    const hostName = user ? user.full_name : "Saransh Singh";
     try {
-      const meeting = await api.createInstantMeeting("Instant Meeting", hostName);
+      const meeting = await api.createInstantMeeting("Instant Meeting", user.full_name);
+      sessionStorage.setItem("displayName", user.full_name);
       router.push(`/meeting/${meeting.meeting_id}`);
     } catch {
       setCreating(false);
@@ -56,7 +61,7 @@ export default function Navbar() {
 
   const initials = user
     ? user.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
-    : "SS";
+    : "";
 
   return (
     <nav className="navbar">
@@ -145,14 +150,24 @@ export default function Navbar() {
             </button>
           </div>
         ) : (
-          <Link
-            href="/login"
-            className="navbar-action-btn"
-            style={{ background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)" }}
-            id="btn-nav-login"
-          >
-            Sign In
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Link
+              href="/login"
+              className="navbar-action-btn"
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)" }}
+              id="btn-nav-login"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              className="navbar-action-btn"
+              style={{ background: "#0E72ED", border: "none", color: "white" }}
+              id="btn-nav-signup"
+            >
+              Sign Up
+            </Link>
+          </div>
         )}
       </div>
     </nav>

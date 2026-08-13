@@ -5,7 +5,7 @@ import VideoGrid from "@/components/VideoGrid";
 import MeetingControls from "@/components/MeetingControls";
 import { api, Meeting, Participant } from "@/lib/api";
 
-const DEFAULT_HOST = "Saransh Singh";
+const DEFAULT_HOST = "Guest";
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -259,13 +259,14 @@ export default function MeetingPage() {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
         const knownScreenStreamId = screenShareStreamIds.current[peerName];
-        const alreadyHasCameraStream = !!remoteStreamsRef.current[peerName];
+        const existingCameraStream = remoteStreamsRef.current[peerName];
+        const hasCameraVideo = !!(existingCameraStream && existingCameraStream.getVideoTracks().length > 0);
 
         const isScreenTrack =
           (knownScreenStreamId ? stream.id === knownScreenStreamId : false) ||
           event.track.contentHint === "detail" ||
           /screen|window|tab/i.test(event.track.label) ||
-          (event.track.kind === "video" && alreadyHasCameraStream && stream.id !== remoteStreamsRef.current[peerName]?.id);
+          (event.track.kind === "video" && hasCameraVideo && stream.id !== existingCameraStream?.id);
 
         console.log("[ontrack]", peerName, {
           kind: event.track.kind,
@@ -273,6 +274,7 @@ export default function MeetingPage() {
           label: event.track.label,
           streamId: stream.id,
           knownScreenId: knownScreenStreamId,
+          hasCameraVideo,
           isScreenTrack,
         });
 

@@ -7,7 +7,19 @@ import { api } from "@/lib/api";
 export default function JoinPage() {
   const router = useRouter();
   const [meetingId, setMeetingId] = useState("");
-  const [displayName, setDisplayName] = useState("Saransh Singh");
+  const [displayName, setDisplayName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("user");
+      if (cached) {
+        try {
+          const u = JSON.parse(cached);
+          if (u.full_name) return u.full_name;
+        } catch {}
+      }
+      return sessionStorage.getItem("displayName") || "";
+    }
+    return "";
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
