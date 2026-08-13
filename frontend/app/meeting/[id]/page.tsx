@@ -149,6 +149,7 @@ export default function MeetingPage() {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
   const screenSendersRef = useRef<Record<string, RTCRtpSender>>({});
+  const screenShareStreamIds = useRef<Record<string, string>>({}); // peerName → screen streamId
   const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -247,18 +248,18 @@ export default function MeetingPage() {
       }
     };
 
-    // Handle remote track arrival — detect screen share vs camera by contentHint/label
+    // Handle remote track arrival — use signaled streamId for reliable screen share detection
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
-        const track = event.track;
-        const isScreenTrack =
-          track.contentHint === "detail" ||
-          /screen|window|tab/i.test(track.label);
+        const knownScreenStreamId = screenShareStreamIds.current[peerName];
+        const isScreenTrack = knownScreenStreamId
+          ? stream.id === knownScreenStreamId
+          : event.track.contentHint === "detail" || /screen|window|tab/i.test(event.track.label);
 
         if (isScreenTrack) {
           setRemoteScreenStreams((prev) => ({ ...prev, [peerName]: stream }));
-          track.onended = () => {
+          event.track.onended = () => {
             setRemoteScreenStreams((prev) => {
               const next = { ...prev };
               delete next[peerName];
@@ -353,6 +354,16 @@ export default function MeetingPage() {
       setChatMessages((prev) => [...prev, data.payload]);
     } else if (data.type === "PARTICIPANTS_UPDATE") {
       api.getParticipants(meetingId).then(setParticipants).catch(() => {});
+    } else if (data.type === "SCREEN_SHARE_STARTED") {
+      // Store stream ID so ontrack can reliably identify screen tracks from this peer
+      screenShareStreamIds.current[data.sender] = data.streamId;
+    } else if (data.type === "SCREEN_SHARE_STOPPED") {
+      delete screenShareStreamIds.current[data.sender];
+      setRemoteScreenStreams((prev) => {
+        const next = { ...prev };
+        delete next[data.sender];
+        return next;
+      });
     } else if (data.type === "MUTE_USER" && data.payload.target === localName) {
       setIsMuted(true);
       showToast("You were muted by the host");
@@ -484,9 +495,11 @@ export default function MeetingPage() {
     }
   };
 
-  // ─── Real Screen Sharing (Bug 3 Fix: tracks sent to all peer connections) ──
+  // ─── Real Screen Sharing ──────────────────────────────────────────────────
   const handleShareScreen = async () => {
     if (screenStream) {
+      // Signal stop BEFORE removing tracks
+      sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
       // Stop sharing: remove screen track from every peer connection
       Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
         const sender = screenSendersRef.current[peerName];
@@ -511,8 +524,10 @@ export default function MeetingPage() {
       showToast("Screen sharing started!");
 
       const screenTrack = stream.getVideoTracks()[0];
-      // Mark track so remote receivers can identify it as screen share
-      screenTrack.contentHint = "detail";
+      screenTrack.contentHint = "detail"; // fallback hint
+
+      // Signal BEFORE adding track so remote ontrack can match stream.id reliably
+      sendSignal({ type: "SCREEN_SHARE_STARTED", sender: localName, streamId: stream.id });
 
       // Add screen track to ALL existing peer connections
       Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
@@ -524,6 +539,7 @@ export default function MeetingPage() {
 
       // Auto-cleanup when user clicks browser's "Stop sharing" button
       screenTrack.onended = () => {
+        sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
         Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
           const sender = screenSendersRef.current[peerName];
           if (sender) {
