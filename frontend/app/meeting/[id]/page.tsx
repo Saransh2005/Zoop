@@ -145,7 +145,9 @@ export default function MeetingPage() {
   const [chatInput, setChatInput] = useState("");
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
+  const screenSendersRef = useRef<Record<string, RTCRtpSender>>({});
   const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -156,19 +158,23 @@ export default function MeetingPage() {
     setTimeout(() => setToast(""), 2700);
   };
 
-  // ─── Attach Local Tracks Helper ─────────────────────────────────────────────
+  // ─── Attach Local Tracks Helper (Bug 1 Fix: use replaceTrack for stopped senders) ─────
   const attachLocalTracks = useCallback((pc: RTCPeerConnection) => {
-    if (localStreamRef.current) {
-      const senders = pc.getSenders();
-      localStreamRef.current.getTracks().forEach((track) => {
-        const exists = senders.some((s) => s.track && s.track.kind === track.kind);
-        if (!exists) {
-          try {
-            pc.addTrack(track, localStreamRef.current!);
-          } catch (e) {}
+    if (!localStreamRef.current) return;
+    const senders = pc.getSenders();
+    localStreamRef.current.getTracks().forEach((track) => {
+      const existingSender = senders.find((s) => s.track && s.track.kind === track.kind);
+      if (existingSender) {
+        // Replace even if sender exists — the old track may be stopped
+        if (existingSender.track !== track) {
+          existingSender.replaceTrack(track).catch(() => {});
         }
-      });
-    }
+      } else {
+        try {
+          pc.addTrack(track, localStreamRef.current!);
+        } catch (e) {}
+      }
+    });
   }, []);
 
   // Send signaling message via WS + BroadcastChannel
@@ -213,6 +219,32 @@ export default function MeetingPage() {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     peerConnectionsRef.current[peerName] = pc;
     attachLocalTracks(pc);
+
+    // Bug 3 Fix: attach active screen share track to new peer connections
+    if (screenStreamRef.current) {
+      const screenTrack = screenStreamRef.current.getVideoTracks()[0];
+      if (screenTrack) {
+        const sender = pc.addTrack(screenTrack, screenStreamRef.current);
+        screenSendersRef.current[peerName] = sender;
+      }
+    }
+
+    // Bug 2 Fix: auto-renegotiate when tracks are added late
+    pc.onnegotiationneeded = async () => {
+      try {
+        if (pc.signalingState === "closed") return;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendSignal({
+          type: "WEBRTC_OFFER",
+          sender: localName,
+          target: peerName,
+          offer,
+        });
+      } catch (e) {
+        console.warn("Renegotiation failed", e);
+      }
+    };
 
     // Handle remote track arrival
     pc.ontrack = (event) => {
@@ -403,13 +435,11 @@ export default function MeetingPage() {
     }
   }, [isMuted]);
 
-  // Camera Toggle: Physically stop video track when turning camera OFF
+  // Camera Toggle (Bug 1 Fix: replaceTrack instead of addTrack hack)
   const toggleCamera = async () => {
     if (isCameraOn) {
       if (localStreamRef.current) {
-        localStreamRef.current.getVideoTracks().forEach((track) => {
-          track.stop();
-        });
+        localStreamRef.current.getVideoTracks().forEach((track) => track.stop());
       }
       setIsCameraOn(false);
       showToast("Camera off");
@@ -423,36 +453,68 @@ export default function MeetingPage() {
         }
         const videoTrack = newCamStream.getVideoTracks()[0];
         if (localStreamRef.current && videoTrack) {
+          // Remove old stopped video tracks from localStream
+          localStreamRef.current.getVideoTracks().forEach((t) => localStreamRef.current!.removeTrack(t));
           localStreamRef.current.addTrack(videoTrack);
         }
+        // attachLocalTracks uses replaceTrack → automatically renegotiates via onnegotiationneeded
+        Object.values(peerConnectionsRef.current).forEach((pc) => attachLocalTracks(pc));
         setIsCameraOn(true);
         showToast("Camera on");
-
-        sendSignal({ type: "WEBRTC_JOIN", sender: localName });
       } catch (e) {
         showToast("Unable to start camera");
       }
     }
   };
 
-  // ─── Real Screen Sharing (getDisplayMedia) ─────────────────────────────────
+  // ─── Real Screen Sharing (Bug 3 Fix: tracks sent to all peer connections) ──
   const handleShareScreen = async () => {
     if (screenStream) {
+      // Stop sharing: remove screen track from every peer connection
+      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
+        const sender = screenSendersRef.current[peerName];
+        if (sender) {
+          try { pc.removeTrack(sender); } catch (e) {}
+          delete screenSendersRef.current[peerName];
+        }
+      });
       screenStream.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
       setScreenStream(null);
+      setIsScreenSharing(false);
       showToast("Screen sharing stopped");
       return;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-      });
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      screenStreamRef.current = stream;
       setScreenStream(stream);
+      setIsScreenSharing(true);
       showToast("Screen sharing started!");
 
-      stream.getVideoTracks()[0].onended = () => {
+      const screenTrack = stream.getVideoTracks()[0];
+
+      // Add screen track to ALL existing peer connections
+      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
+        try {
+          const sender = pc.addTrack(screenTrack, stream); // triggers onnegotiationneeded
+          screenSendersRef.current[peerName] = sender;
+        } catch (e) {}
+      });
+
+      // Auto-cleanup when user clicks browser's "Stop sharing" button
+      screenTrack.onended = () => {
+        Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
+          const sender = screenSendersRef.current[peerName];
+          if (sender) {
+            try { pc.removeTrack(sender); } catch (e) {}
+            delete screenSendersRef.current[peerName];
+          }
+        });
+        screenStreamRef.current = null;
         setScreenStream(null);
+        setIsScreenSharing(false);
         showToast("Screen sharing ended");
       };
     } catch (err) {
