@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import LayoutWrapper from "@/components/LayoutWrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,11 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <Navbar />
-        <div style={{ paddingTop: 52, flex: 1 }}>
+        <LayoutWrapper>
           {children}
-        </div>
-        <Footer />
+        </LayoutWrapper>
       </body>
     </html>
   );
