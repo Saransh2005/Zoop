@@ -55,7 +55,7 @@ export default function Navbar() {
   };
 
   const initials = user
-    ? user.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    ? user.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
     : "SS";
 
   return (

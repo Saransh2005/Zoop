@@ -50,7 +50,7 @@ function createFallbackVideoStream(name: string): MediaStream {
     ctx.font = "bold 44px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase(), 320, 240);
+    ctx.fillText(name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase(), 320, 240);
 
     // Live video badge
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -600,7 +600,7 @@ export default function MeetingRoom() {
             <div className="panel-content">
               <div className="participant-item">
                 <div className="participant-dot" style={{ background: "linear-gradient(135deg, #0E72ED, #0B5CCC)" }}>
-                  {localName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  {localName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                 </div>
                 <span className="participant-name">{localName} (You)</span>
                 <div className="participant-badges">
@@ -618,7 +618,7 @@ export default function MeetingRoom() {
                 .map((p) => (
                   <div className="participant-item" key={p.id}>
                     <div className="participant-dot">
-                      {p.display_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      {p.display_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                     </div>
                     <span className="participant-name">{p.display_name}</span>
                     <div className="participant-badges">

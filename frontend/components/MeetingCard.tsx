@@ -22,7 +22,7 @@ const statusLabels: Record<string, string> = {
 export default function MeetingCard({ meeting, variant = "recent" }: MeetingCardProps) {
   const initials = meeting.host_name
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();

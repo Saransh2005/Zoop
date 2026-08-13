@@ -26,7 +26,7 @@ function getColor(name: string) {
 function initials(name: string) {
   return name
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
