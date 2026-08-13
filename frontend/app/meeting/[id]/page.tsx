@@ -138,6 +138,8 @@ export default function MeetingPage() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [remoteScreenPresenters, setRemoteScreenPresenters] = useState<Record<string, boolean>>({});
+  const [remoteCameraStates, setRemoteCameraStates] = useState<Record<string, boolean>>({});
+  const [remoteMuteStates, setRemoteMuteStates] = useState<Record<string, boolean>>({});
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -268,6 +270,16 @@ export default function MeetingPage() {
         const stream = event.streams[0];
         remoteStreamsRef.current[peerName] = stream;
         setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
+
+        // Native track mute/unmute listeners for instant camera off/on avatar toggle
+        if (event.track.kind === "video") {
+          event.track.onmute = () => {
+            setRemoteCameraStates((prev) => ({ ...prev, [peerName]: false }));
+          };
+          event.track.onunmute = () => {
+            setRemoteCameraStates((prev) => ({ ...prev, [peerName]: true }));
+          };
+        }
       }
     };
 
@@ -361,6 +373,10 @@ export default function MeetingPage() {
         delete next[data.sender];
         return next;
       });
+    } else if (data.type === "CAMERA_TOGGLE") {
+      setRemoteCameraStates((prev) => ({ ...prev, [data.sender]: data.isCameraOn }));
+    } else if (data.type === "MUTE_TOGGLE") {
+      setRemoteMuteStates((prev) => ({ ...prev, [data.sender]: data.isMuted }));
     } else if (data.type === "MUTE_USER" && data.payload.target === localName) {
       setIsMuted(true);
       showToast("You were muted by the host");
@@ -458,15 +474,17 @@ export default function MeetingPage() {
         track.enabled = !isMuted;
       });
     }
-  }, [isMuted]);
+    sendSignal({ type: "MUTE_TOGGLE", sender: localName, isMuted });
+  }, [isMuted, localName, sendSignal]);
 
-  // Camera Toggle (Bug 1 Fix: replaceTrack instead of addTrack hack)
+  // Camera Toggle
   const toggleCamera = async () => {
     if (isCameraOn) {
       if (localStreamRef.current) {
         localStreamRef.current.getVideoTracks().forEach((track) => track.stop());
       }
       setIsCameraOn(false);
+      sendSignal({ type: "CAMERA_TOGGLE", sender: localName, isCameraOn: false });
       showToast("Camera off");
     } else {
       try {
@@ -478,13 +496,12 @@ export default function MeetingPage() {
         }
         const videoTrack = newCamStream.getVideoTracks()[0];
         if (localStreamRef.current && videoTrack) {
-          // Remove old stopped video tracks from localStream
           localStreamRef.current.getVideoTracks().forEach((t) => localStreamRef.current!.removeTrack(t));
           localStreamRef.current.addTrack(videoTrack);
         }
-        // attachLocalTracks uses replaceTrack → automatically renegotiates via onnegotiationneeded
         Object.values(peerConnectionsRef.current).forEach((pc) => attachLocalTracks(pc));
         setIsCameraOn(true);
+        sendSignal({ type: "CAMERA_TOGGLE", sender: localName, isCameraOn: true });
         showToast("Camera on");
       } catch (e) {
         showToast("Unable to start camera");
@@ -724,6 +741,8 @@ export default function MeetingPage() {
             remoteStreams={remoteStreams}
             screenStream={screenStream}
             remoteScreenPresenters={remoteScreenPresenters}
+            remoteCameraStates={remoteCameraStates}
+            remoteMuteStates={remoteMuteStates}
           />
 
           {/* Controls */}

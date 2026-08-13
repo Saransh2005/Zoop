@@ -11,6 +11,8 @@ interface VideoGridProps {
   remoteStreams?: Record<string, MediaStream>;
   screenStream: MediaStream | null;
   remoteScreenPresenters?: Record<string, boolean>;
+  remoteCameraStates?: Record<string, boolean>;
+  remoteMuteStates?: Record<string, boolean>;
 }
 
 const AVATAR_COLORS = [
@@ -42,11 +44,11 @@ function VideoTile({ name, isHost, isMuted, isCameraOn = true, isLocal, stream, 
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
+    if (videoRef.current && stream && isCameraOn) {
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(() => {});
     }
-  }, [stream]);
+  }, [stream, isCameraOn]);
 
   return (
     <div
@@ -195,6 +197,8 @@ export default function VideoGrid({
   remoteStreams = {},
   screenStream,
   remoteScreenPresenters = {},
+  remoteCameraStates = {},
+  remoteMuteStates = {},
 }: VideoGridProps) {
   const others = participants.filter(
     (p) => p.display_name !== localName && p.left_at === null
@@ -248,18 +252,27 @@ export default function VideoGrid({
           </div>
 
           {/* Remote participants */}
-          {others.map((p: Participant) => (
-            <div key={p.id} style={{ height: 120, flexShrink: 0 }}>
-              <VideoTile
-                name={p.display_name}
-                isMuted={p.is_muted}
-                isCameraOn={p.is_video_on}
-                isHost={p.is_host}
-                stream={remoteStreams[p.display_name]}
-                compact
-              />
-            </div>
-          ))}
+          {others.map((p: Participant) => {
+            const isRemoteCamOn = remoteCameraStates[p.display_name] !== undefined
+              ? remoteCameraStates[p.display_name]
+              : p.is_video_on;
+            const isRemoteMuted = remoteMuteStates[p.display_name] !== undefined
+              ? remoteMuteStates[p.display_name]
+              : p.is_muted;
+
+            return (
+              <div key={p.id} style={{ height: 120, flexShrink: 0 }}>
+                <VideoTile
+                  name={p.display_name}
+                  isMuted={isRemoteMuted}
+                  isCameraOn={isRemoteCamOn}
+                  isHost={p.is_host}
+                  stream={remoteStreams[p.display_name]}
+                  compact
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -295,16 +308,26 @@ export default function VideoGrid({
         isHost
       />
 
-      {others.map((p: Participant) => (
-        <VideoTile
-          key={p.id}
-          name={p.display_name}
-          isMuted={p.is_muted}
-          isCameraOn={p.is_video_on}
-          isHost={p.is_host}
-          stream={remoteStreams[p.display_name]}
-        />
-      ))}
+      {others.map((p: Participant) => {
+        const isRemoteCamOn = remoteCameraStates[p.display_name] !== undefined
+          ? remoteCameraStates[p.display_name]
+          : p.is_video_on;
+        const isRemoteMuted = remoteMuteStates[p.display_name] !== undefined
+          ? remoteMuteStates[p.display_name]
+          : p.is_muted;
+
+        return (
+          <VideoTile
+            key={p.id}
+            name={p.display_name}
+            isMuted={isRemoteMuted}
+            isCameraOn={isRemoteCamOn}
+            isHost={p.is_host}
+            stream={remoteStreams[p.display_name]}
+          />
+        );
+      })}
     </div>
   );
 }
+
