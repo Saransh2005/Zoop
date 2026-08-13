@@ -232,20 +232,20 @@ export default function MeetingPage() {
       }
     }
 
-    // Bug 2 Fix: auto-renegotiate when tracks are added (with glare guard)
+    // Auto-renegotiate when tracks are added (glare guard + modern implicit offer API)
     let isNegotiating = false;
     pc.onnegotiationneeded = async () => {
       if (isNegotiating || pc.signalingState !== "stable") return;
       try {
         isNegotiating = true;
-        const offer = await pc.createOffer();
-        if (pc.signalingState !== "stable") return; // recheck after async
-        await pc.setLocalDescription(offer);
+        // Modern: setLocalDescription() without args creates + sets the offer atomically
+        // This avoids the m-line ordering bug in Chrome (no separate createOffer step)
+        await pc.setLocalDescription();
         sendSignal({
           type: "WEBRTC_OFFER",
           sender: localName,
           target: peerName,
-          offer,
+          offer: pc.localDescription,
         });
       } catch (e) {
         console.warn("[onnegotiationneeded] failed", e);
@@ -314,13 +314,13 @@ export default function MeetingPage() {
     if (data.type === "WEBRTC_JOIN") {
       const pc = createPeerConnection(data.sender);
       attachLocalTracks(pc);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      // Atomic offer creation — avoids m-line order issues
+      await pc.setLocalDescription();
       sendSignal({
         type: "WEBRTC_OFFER",
         sender: localName,
         target: data.sender,
-        offer: offer,
+        offer: pc.localDescription,
       });
     } else if (data.type === "WEBRTC_OFFER" && (data.target === localName || !data.target)) {
       const pc = createPeerConnection(data.sender);
@@ -336,13 +336,13 @@ export default function MeetingPage() {
       }
       pendingIceCandidatesRef.current[data.sender] = [];
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      // Atomic answer creation — avoids m-line order issues
+      await pc.setLocalDescription();
       sendSignal({
         type: "WEBRTC_ANSWER",
         sender: localName,
         target: data.sender,
-        answer: answer,
+        answer: pc.localDescription,
       });
     } else if (data.type === "WEBRTC_ANSWER" && (data.target === localName || !data.target)) {
       const pc = peerConnectionsRef.current[data.sender];
