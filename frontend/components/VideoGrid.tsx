@@ -10,6 +10,7 @@ interface VideoGridProps {
   localStream: MediaStream | null;
   remoteStreams?: Record<string, MediaStream>;
   screenStream: MediaStream | null;
+  remoteScreenStreams?: Record<string, MediaStream>;
 }
 
 const AVATAR_COLORS = [
@@ -116,6 +117,7 @@ function ScreenShareStage({ stream, presenterName }: { stream: MediaStream; pres
         ref={screenRef}
         autoPlay
         playsInline
+        muted={false}
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
       <div style={{
@@ -148,6 +150,7 @@ export default function VideoGrid({
   localStream,
   remoteStreams = {},
   screenStream,
+  remoteScreenStreams = {},
 }: VideoGridProps) {
   const others = participants.filter(
     (p) => p.display_name !== localName && p.left_at === null
@@ -163,10 +166,16 @@ export default function VideoGrid({
       ? "video-grid-4"
       : "video-grid-many";
 
-  if (screenStream) {
+  // Determine the active screen share: local takes priority, then first remote
+  const remoteScreenEntry = Object.entries(remoteScreenStreams)[0]; // [peerName, stream]
+  const activeScreenStream = screenStream || remoteScreenEntry?.[1] || null;
+  const activePresenterName = screenStream ? localName : remoteScreenEntry?.[0] || "";
+
+  if (activeScreenStream) {
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <ScreenShareStage stream={screenStream} presenterName={localName} />
+        <ScreenShareStage stream={activeScreenStream} presenterName={activePresenterName} />
+        {/* Thumbnail strip */}
         <div style={{ height: 120, background: "#181818", borderTop: "1px solid #2a2a2a", padding: 8, display: "flex", gap: 8, overflowX: "auto" }}>
           <div style={{ width: 140, flexShrink: 0 }}>
             <VideoTile

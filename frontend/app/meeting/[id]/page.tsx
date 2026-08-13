@@ -137,6 +137,7 @@ export default function MeetingPage() {
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Record<string, MediaStream>>({});
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -246,11 +247,27 @@ export default function MeetingPage() {
       }
     };
 
-    // Handle remote track arrival
+    // Handle remote track arrival — detect screen share vs camera by contentHint/label
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
-        setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
+        const track = event.track;
+        const isScreenTrack =
+          track.contentHint === "detail" ||
+          /screen|window|tab/i.test(track.label);
+
+        if (isScreenTrack) {
+          setRemoteScreenStreams((prev) => ({ ...prev, [peerName]: stream }));
+          track.onended = () => {
+            setRemoteScreenStreams((prev) => {
+              const next = { ...prev };
+              delete next[peerName];
+              return next;
+            });
+          };
+        } else {
+          setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
+        }
       }
     };
 
@@ -494,6 +511,8 @@ export default function MeetingPage() {
       showToast("Screen sharing started!");
 
       const screenTrack = stream.getVideoTracks()[0];
+      // Mark track so remote receivers can identify it as screen share
+      screenTrack.contentHint = "detail";
 
       // Add screen track to ALL existing peer connections
       Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
@@ -683,6 +702,7 @@ export default function MeetingPage() {
             localStream={localStream}
             remoteStreams={remoteStreams}
             screenStream={screenStream}
+            remoteScreenStreams={remoteScreenStreams}
           />
 
           {/* Controls */}
