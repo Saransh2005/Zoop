@@ -6,7 +6,30 @@ import MeetingControls from "@/components/MeetingControls";
 import { api, Meeting, Participant } from "@/lib/api";
 
 const DEFAULT_HOST = "Saransh Singh";
-const ICE_SERVERS = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+const ICE_SERVERS: RTCConfiguration = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:openrelay.metered.ca:80" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+  ],
+};
 
 interface ChatMessage {
   sender: string;
@@ -73,14 +96,14 @@ function createFallbackVideoStream(name: string): MediaStream {
   return stream;
 }
 
-export default function MeetingRoom() {
-  const params = useParams();
-  const meetingId = params.id as string;
+export default function MeetingPage() {
   const router = useRouter();
+  const params = useParams();
+  const meetingId = (params?.id as string) || "";
 
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [localName] = useState(() => {
+  const [localName] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("user");
       if (cached) {
@@ -96,34 +119,61 @@ export default function MeetingRoom() {
 
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [participantId, setParticipantId] = useState<number | null>(null);
 
-  // Media Streams & Peer Connections
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-
-  const wsRef = useRef<WebSocket | null>(null);
-  const channelRef = useRef<BroadcastChannel | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { sender: "System", text: "Welcome to the meeting! 👋", time: "now" },
   ]);
   const [chatInput, setChatInput] = useState("");
-  const [participantId, setParticipantId] = useState<number | null>(null);
+
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
+  const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
+  const wsRef = useRef<WebSocket | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 2700);
   };
+
+  // ─── Attach Local Tracks Helper ─────────────────────────────────────────────
+  const attachLocalTracks = useCallback((pc: RTCPeerConnection) => {
+    if (localStreamRef.current) {
+      const senders = pc.getSenders();
+      localStreamRef.current.getTracks().forEach((track) => {
+        const exists = senders.some((s) => s.track && s.track.kind === track.kind);
+        if (!exists) {
+          try {
+            pc.addTrack(track, localStreamRef.current!);
+          } catch (e) {}
+        }
+      });
+    }
+  }, []);
+
+  // Send signaling message via WS + BroadcastChannel
+  const sendSignal = useCallback((msg: object) => {
+    const payload = JSON.stringify(msg);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(payload);
+    }
+    if (channelRef.current) {
+      channelRef.current.postMessage(payload);
+    }
+  }, []);
 
   // Helper to completely kill hardware media tracks
   const stopAllMediaTracks = useCallback(() => {
@@ -145,32 +195,17 @@ export default function MeetingRoom() {
     }
   }, [screenStream]);
 
-  // Send signaling message via WS + BroadcastChannel
-  const sendSignal = useCallback((msg: object) => {
-    const payload = JSON.stringify(msg);
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(payload);
-    }
-    if (channelRef.current) {
-      channelRef.current.postMessage(payload);
-    }
-  }, []);
-
   // WebRTC Peer Connection Helper
   const createPeerConnection = useCallback((peerName: string): RTCPeerConnection => {
     if (peerConnectionsRef.current[peerName]) {
-      return peerConnectionsRef.current[peerName];
+      const pc = peerConnectionsRef.current[peerName];
+      attachLocalTracks(pc);
+      return pc;
     }
 
     const pc = new RTCPeerConnection(ICE_SERVERS);
     peerConnectionsRef.current[peerName] = pc;
-
-    // Add local stream tracks to PC
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
-    }
+    attachLocalTracks(pc);
 
     // Handle remote track arrival
     pc.ontrack = (event) => {
@@ -193,7 +228,7 @@ export default function MeetingRoom() {
     };
 
     return pc;
-  }, [localName, sendSignal]);
+  }, [localName, sendSignal, attachLocalTracks]);
 
   // WebRTC Signal Processing
   const handleSignal = useCallback(async (data: any) => {
@@ -201,6 +236,7 @@ export default function MeetingRoom() {
 
     if (data.type === "WEBRTC_JOIN") {
       const pc = createPeerConnection(data.sender);
+      attachLocalTracks(pc);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       sendSignal({
@@ -209,19 +245,20 @@ export default function MeetingRoom() {
         target: data.sender,
         offer: offer,
       });
-
-      // Share local stream directly over BroadcastChannel for instant multi-tab fallback
-      if (localStreamRef.current) {
-        setRemoteStreams((prev) => {
-          if (!prev[data.sender] && localStreamRef.current) {
-            return { ...prev, [data.sender]: localStreamRef.current };
-          }
-          return prev;
-        });
-      }
     } else if (data.type === "WEBRTC_OFFER" && (data.target === localName || !data.target)) {
       const pc = createPeerConnection(data.sender);
+      attachLocalTracks(pc);
       await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+      // Flush pending ICE candidates if any
+      const pending = pendingIceCandidatesRef.current[data.sender] || [];
+      for (const cand of pending) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (e) {}
+      }
+      pendingIceCandidatesRef.current[data.sender] = [];
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       sendSignal({
@@ -234,13 +271,27 @@ export default function MeetingRoom() {
       const pc = peerConnectionsRef.current[data.sender];
       if (pc && pc.signalingState !== "closed") {
         await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+        // Flush pending ICE candidates if any
+        const pending = pendingIceCandidatesRef.current[data.sender] || [];
+        for (const cand of pending) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (e) {}
+        }
+        pendingIceCandidatesRef.current[data.sender] = [];
       }
     } else if (data.type === "WEBRTC_ICE" && (data.target === localName || !data.target)) {
       const pc = peerConnectionsRef.current[data.sender];
-      if (pc && data.candidate) {
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (e) {}
+      } else {
+        if (!pendingIceCandidatesRef.current[data.sender]) {
+          pendingIceCandidatesRef.current[data.sender] = [];
+        }
+        pendingIceCandidatesRef.current[data.sender].push(data.candidate);
       }
     } else if (data.type === "CHAT_MSG") {
       setChatMessages((prev) => [...prev, data.payload]);
@@ -307,6 +358,11 @@ export default function MeetingRoom() {
       if (mounted) {
         localStreamRef.current = stream;
         setLocalStream(stream);
+
+        // Attach tracks to any already-created peer connections
+        Object.values(peerConnectionsRef.current).forEach((pc) => {
+          attachLocalTracks(pc);
+        });
 
         // Announce join to initiate WebRTC P2P connection exchange
         sendSignal({ type: "WEBRTC_JOIN", sender: localName });
