@@ -213,7 +213,7 @@ export default function SchedulePage() {
                   </>
                 )}
               </button>
-              <Link href="/" className="btn-secondary" style={{ flex: "0 0 auto", padding: "13px 24px", textAlign: "center" }} id="btn-cancel">
+              <Link href="/" className="btn-secondary" style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }} id="btn-cancel">
                 Cancel
               </Link>
             </div>
