@@ -614,8 +614,8 @@ export default function MeetingRoom() {
                 </div>
               </div>
               {activeParticipants
-                .filter((p) => p.display_name !== localName)
-                .map((p) => (
+                .filter((p: Participant) => p.display_name !== localName)
+                .map((p: Participant) => (
                   <div className="participant-item" key={p.id}>
                     <div className="participant-dot">
                       {p.display_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
@@ -650,7 +650,7 @@ export default function MeetingRoom() {
             </div>
             <div className="panel-content">
               <div className="chat-messages">
-                {chatMessages.map((msg, i) => (
+                {chatMessages.map((msg: ChatMessage, i: number) => (
                   <div className="chat-bubble" key={i}>
                     <div className="chat-sender">{msg.sender}</div>
                     <div className="chat-text">{msg.text}</div>

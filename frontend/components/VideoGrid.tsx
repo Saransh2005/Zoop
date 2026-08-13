@@ -178,7 +178,7 @@ export default function VideoGrid({
               isHost
             />
           </div>
-          {others.map((p) => (
+          {others.map((p: Participant) => (
             <div key={p.id} style={{ width: 140, flexShrink: 0 }}>
               <VideoTile
                 name={p.display_name}
@@ -204,7 +204,7 @@ export default function VideoGrid({
         stream={localStream}
         isHost
       />
-      {others.map((p) => {
+      {others.map((p: Participant) => {
         const remoteStream = remoteStreams[p.display_name];
         return (
           <VideoTile
