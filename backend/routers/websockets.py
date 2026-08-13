@@ -26,26 +26,22 @@ class ConnectionManager:
     async def broadcast(self, meeting_id: str, message: dict, sender: WebSocket = None):
         if meeting_id in self.active_connections:
             payload = json.dumps(message)
-            for connection in self.active_connections[meeting_id]:
+            dead = []
+            for connection in list(self.active_connections[meeting_id]):
                 if connection != sender:
                     try:
                         await connection.send_text(payload)
                     except Exception:
-                        pass
+                        dead.append(connection)
+            for d in dead:
+                self.disconnect(meeting_id, d)
 
 
 manager = ConnectionManager()
 
 
 @router.websocket("/ws/meeting/{meeting_id}")
-def websocket_endpoint(websocket: WebSocket, meeting_id: str):
-    # Note: Using synchronous function for compatibility with uvicorn async loop execution
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(handle_ws(websocket, meeting_id))
-
-
-async def handle_ws(websocket: WebSocket, meeting_id: str):
+async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
     await manager.connect(meeting_id, websocket)
     try:
         while True:
