@@ -269,7 +269,10 @@ export default function MeetingRoom() {
       } catch (e) {}
     };
 
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/meeting/${meetingId}`;
+    const rawApi = process.env.NEXT_PUBLIC_API_URL || "https://zoop-t1l7.onrender.com";
+    const backendHost = rawApi.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${backendHost}/ws/meeting/${meetingId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

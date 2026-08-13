@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://zoop-t1l7.onrender.com").replace(/\/$/, "");
 
 export interface User {
   id: number;
