@@ -710,6 +710,21 @@ export default function MeetingPage() {
           <span className="meeting-topic">{meeting.title}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            className="btn-secondary"
+            style={{ padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/meeting/${meetingId}`);
+              showToast("Invite link copied to clipboard");
+            }}
+            title="Copy invite link"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            Copy Link
+          </button>
           <span style={{ fontSize: 13, color: "var(--text-2)" }}>
             {activeParticipants.length} participant{activeParticipants.length !== 1 ? "s" : ""}
           </span>
