@@ -25,7 +25,7 @@ export default function LoginPage() {
       localStorage.setItem("token", res.access_token);
       localStorage.setItem("user", JSON.stringify(res.user));
       sessionStorage.setItem("displayName", res.user.full_name);
-      router.push("/");
+      window.location.href = "/";
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to sign in.");
       setLoading(false);
