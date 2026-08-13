@@ -498,7 +498,7 @@ input, textarea, select { font-family: inherit; outline: none; border: none; bac
 .meeting-start-btn:hover { background: var(--blue-hover); }
 
 /* ─── Recent Activity ─────────────────────────────────────────────────────────── */
-.activity-list { display: flex; flex-direction: column; gap: 1px; }
+.activity-list { display: flex; flex-direction: column; gap: 10px; }
 .activity-card {
   background: white;
   border: 1px solid var(--border);
@@ -509,6 +509,7 @@ input, textarea, select { font-family: inherit; outline: none; border: none; bac
   gap: 14px;
   transition: box-shadow var(--transition);
   cursor: pointer;
+  text-decoration: none;
 }
 .activity-card:hover { box-shadow: var(--shadow-sm); border-color: #ccc; }
 .activity-icon {

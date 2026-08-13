@@ -369,12 +369,12 @@ export default function Dashboard() {
               </div>
 
               {/* Recent Activity Table */}
-              <div className="activity-section" id="recent-activity">
-                <div className="activity-header">
-                  <h3 className="activity-title">Recent activity</h3>
+              <div style={{ marginTop: 28 }} id="recent-activity">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Recent activity</h3>
                   {allMeetings.length > PREVIEW_COUNT && (
                     <button
-                      className="activity-view-all"
+                      style={{ background: "none", border: "none", color: "var(--blue)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                       onClick={() => setShowAll((s) => !s)}
                       id="btn-view-all-activity"
                     >
@@ -385,40 +385,36 @@ export default function Dashboard() {
 
                 <div className="activity-list">
                   {allMeetings.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)", fontSize: 14 }}>
+                    <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)", fontSize: 14, background: "white", borderRadius: 8, border: "1px solid var(--border)" }}>
                       No meetings found. Start or schedule a meeting above!
                     </div>
                   ) : (
-                    (showAll ? allMeetings : allMeetings.slice(0, PREVIEW_COUNT)).map((m) => (
-                      <div key={m.id} className="activity-item" id={`activity-item-${m.id}`}>
-                        <div className="activity-icon">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polygon points="23 7 16 12 23 17 23 7" />
-                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                          </svg>
-                        </div>
+                    (showAll ? allMeetings : allMeetings.slice(0, PREVIEW_COUNT)).map((m, idx) => {
+                      const iconColors = ["ai-blue", "ai-orange", "ai-purple", "ai-green"];
+                      const iconColor = iconColors[idx % iconColors.length];
+                      return (
+                        <Link href={`/meeting/${m.meeting_id}`} key={m.id} className="activity-card" id={`activity-item-${m.id}`}>
+                          <div className={`activity-icon ${iconColor}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polygon points="23 7 16 12 23 17 23 7" />
+                              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                            </svg>
+                          </div>
 
-                        <div className="activity-main">
-                          <h4 className="activity-name">{m.title}</h4>
-                          <p className="activity-meta">
-                            {m.host_name} · {formatMeetingTime(m.scheduled_at)}
-                            {m.duration_minutes ? ` · ${formatDuration(m.duration_minutes)}` : ""}
-                          </p>
-                        </div>
+                          <div className="activity-info">
+                            <div className="activity-title">{m.title}</div>
+                            <div className="activity-meta">
+                              {m.host_name} · {formatMeetingTime(m.scheduled_at)}
+                              {m.duration_minutes ? ` · ${formatDuration(m.duration_minutes)}` : ""}
+                            </div>
+                          </div>
 
-                        <span className={`status-pill ${getStatusClass(m.status)}`}>
-                          {getStatusLabel(m.status)}
-                        </span>
-
-                        <Link
-                          href={`/meeting/${m.meeting_id}`}
-                          className="activity-action-btn"
-                          id={`btn-join-activity-${m.id}`}
-                        >
-                          Join
+                          <span className={`activity-status ${getStatusClass(m.status)}`}>
+                            {getStatusLabel(m.status)}
+                          </span>
                         </Link>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
