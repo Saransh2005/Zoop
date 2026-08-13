@@ -5,9 +5,6 @@ import Navbar from "@/components/Navbar";
 import { api, Meeting, User, formatMeetingTime, formatDuration } from "@/lib/api";
 import Link from "next/link";
 
-const DEFAULT_HOST = "Saransh Singh";
-const DEFAULT_PMI = "824-012-5681";
-
 function getMonthDay(dateStr: string | null) {
   if (!dateStr) return { month: "—", day: "—" };
   const d = new Date(dateStr);
@@ -54,7 +51,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    // Load local user or verify me
+    // Load local user session if present
     const cached = localStorage.getItem("user");
     if (cached) {
       try { setUser(JSON.parse(cached)); } catch { }
@@ -66,15 +63,19 @@ export default function Dashboard() {
           setUser(u);
           localStorage.setItem("user", JSON.stringify(u));
         })
-        .catch(() => { });
+        .catch(() => {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          setUser(null);
+        });
+    } else {
+      setUser(null);
     }
   }, [fetchData]);
 
-  const hostName = user ? user.full_name : DEFAULT_HOST;
-  const pmi = user ? user.personal_meeting_id : DEFAULT_PMI;
-
   const handleNewMeeting = async () => {
     setCreating(true);
+    const hostName = user ? user.full_name : (sessionStorage.getItem("displayName") || "Guest Host");
     try {
       const meeting = await api.createInstantMeeting("Instant Meeting", hostName);
       sessionStorage.setItem("displayName", hostName);
@@ -85,19 +86,17 @@ export default function Dashboard() {
   };
 
   const copyPMID = () => {
-    navigator.clipboard.writeText(pmi.replace(/\s/g, ""));
+    if (!user) return;
+    navigator.clipboard.writeText(user.personal_meeting_id.replace(/\s/g, ""));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const allMeetings = [...upcoming, ...recent];
 
-  const initials = hostName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = user
+    ? user.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "";
 
   return (
     <div>
@@ -187,19 +186,36 @@ export default function Dashboard() {
             <div className="profile-card">
               <div className="profile-avatar-wrap">
                 <div className="profile-avatar">
-                  <span>{initials}</span>
+                  {user ? (
+                    <span>{initials}</span>
+                  ) : (
+                    <svg viewBox="0 0 40 40" fill="none" width="36" height="36">
+                      <circle cx="20" cy="20" r="20" fill="#0E72ED" />
+                      <path d="M10 15h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="white" />
+                      <path d="M26 17.5l6-3v11l-6-3v-5z" fill="white" />
+                    </svg>
+                  )}
                 </div>
               </div>
               <div className="profile-info">
-                <h1 className="profile-name">{hostName}</h1>
+                <h1 className="profile-name">{user ? user.full_name : "Welcome to Zoom"}</h1>
                 <p className="profile-plan">
-                  {user ? user.email : "saransh@scaler.com"} · <span>Workplace Basic</span>
+                  {user ? user.email : "Sign in or create a free account to access your personal meeting ID"}
                 </p>
                 <div className="profile-actions">
-                  {!user && (
-                    <Link href="/login" className="profile-btn" id="btn-profile-signin" style={{ background: "var(--blue)", color: "white", borderColor: "var(--blue)" }}>
-                      Sign In / Sign Up
-                    </Link>
+                  {user ? (
+                    <button className="profile-btn" style={{ background: "#0E72ED", color: "white", borderColor: "#0E72ED" }}>
+                      Signed In
+                    </button>
+                  ) : (
+                    <>
+                      <Link href="/login" className="profile-btn" id="btn-profile-signin" style={{ background: "#0E72ED", color: "white", borderColor: "#0E72ED" }}>
+                        Sign In
+                      </Link>
+                      <Link href="/signup" className="profile-btn" id="btn-profile-signup">
+                        Sign Up Free
+                      </Link>
+                    </>
                   )}
                   <button className="profile-btn" id="btn-manage-plan">Manage Plan</button>
                   <button className="profile-btn" id="btn-view-plan">View Plan Details</button>
@@ -249,19 +265,25 @@ export default function Dashboard() {
                 <div className="personal-meeting-id">
                   <div className="pmid-label">Personal Meeting ID</div>
                   <div className="pmid-value">
-                    {pmi}
-                    <button className="pmid-copy" onClick={copyPMID} id="btn-copy-pmid" title="Copy">
-                      {copied ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                        </svg>
-                      )}
-                    </button>
+                    {user ? user.personal_meeting_id : "—"}
+                    {user ? (
+                      <button className="pmid-copy" onClick={copyPMID} id="btn-copy-pmid" title="Copy">
+                        {copied ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        )}
+                      </button>
+                    ) : (
+                      <Link href="/login" style={{ fontSize: 11, color: "var(--blue)", textDecoration: "none", marginLeft: 4 }}>
+                        (Sign in)
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
@@ -298,11 +320,11 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="action-tile-label">{creating ? "Starting…" : "New Meeting"}</div>
-                    <div className="action-tile-desc">Start an instant meeting</div>
+                    <div className="action-tile-sub">Start an instant meeting</div>
                   </div>
                 </button>
 
-                <Link href="/join" className="action-tile" id="btn-join">
+                <Link href="/join" className="action-tile" id="btn-join-meeting">
                   <div className="action-tile-icon at-join">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
@@ -312,12 +334,12 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="action-tile-label">Join</div>
-                    <div className="action-tile-desc">Join a meeting</div>
+                    <div className="action-tile-sub">Join a meeting</div>
                   </div>
                 </Link>
 
-                <Link href="/schedule" className="action-tile" id="btn-schedule">
-                  <div className="action-tile-icon at-sched">
+                <Link href="/schedule" className="action-tile" id="btn-schedule-meeting">
+                  <div className="action-tile-icon at-schedule">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                       <line x1="16" y1="2" x2="16" y2="6" />
@@ -327,12 +349,12 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="action-tile-label">Schedule</div>
-                    <div className="action-tile-desc">Plan a meeting</div>
+                    <div className="action-tile-sub">Plan a meeting</div>
                   </div>
                 </Link>
 
-                <button className="action-tile" id="btn-share-screen" onClick={() => router.push("/join")}>
-                  <div className="action-tile-icon at-screen">
+                <button className="action-tile" onClick={handleNewMeeting} id="btn-share-screen" disabled={creating}>
+                  <div className="action-tile-icon at-share">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                       <line x1="8" y1="21" x2="16" y2="21" />
@@ -341,61 +363,64 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="action-tile-label">Share Screen</div>
-                    <div className="action-tile-desc">Share your screen</div>
+                    <div className="action-tile-sub">Share your screen</div>
                   </div>
                 </button>
               </div>
 
-              {/* Recent Activity */}
-              <div className="section">
-                <div className="section-header">
-                  <h2 className="section-title">Recent activity</h2>
+              {/* Recent Activity Table */}
+              <div className="activity-section" id="recent-activity">
+                <div className="activity-header">
+                  <h3 className="activity-title">Recent activity</h3>
                   {allMeetings.length > PREVIEW_COUNT && (
                     <button
-                      className="section-link"
-                      onClick={() => setShowAll(v => !v)}
+                      className="activity-view-all"
+                      onClick={() => setShowAll((s) => !s)}
                       id="btn-view-all-activity"
                     >
                       {showAll ? "Show less" : `View all (${allMeetings.length})`}
                     </button>
                   )}
                 </div>
-                {loading ? (
-                  <div className="activity-list">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} style={{ height: 64, background: "white", borderRadius: 8, border: "1px solid var(--border)", opacity: 0.6 }} />
-                    ))}
-                  </div>
-                ) : allMeetings.length === 0 ? (
-                  <div className="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <p>No recent activity</p>
-                  </div>
-                ) : (
-                  <div className="activity-list">
-                    {(showAll ? allMeetings : allMeetings.slice(0, PREVIEW_COUNT)).map(m => (
-                      <Link href={m.status !== "ended" ? `/meeting/${m.meeting_id}` : "#"} key={m.id} className="activity-card">
-                        <div className={`activity-icon ${m.status === "active" ? "ai-green" : m.status === "scheduled" ? "ai-blue" : "ai-orange"}`}>
+
+                <div className="activity-list">
+                  {allMeetings.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)", fontSize: 14 }}>
+                      No meetings found. Start or schedule a meeting above!
+                    </div>
+                  ) : (
+                    (showAll ? allMeetings : allMeetings.slice(0, PREVIEW_COUNT)).map((m) => (
+                      <div key={m.id} className="activity-item" id={`activity-item-${m.id}`}>
+                        <div className="activity-icon">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polygon points="23 7 16 12 23 17 23 7" />
                             <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                           </svg>
                         </div>
-                        <div className="activity-info">
-                          <div className="activity-title">{m.title}</div>
-                          <div className="activity-meta">
-                            {m.host_name} · {formatMeetingTime(m.scheduled_at || m.created_at)} · {formatDuration(m.duration_minutes)}
-                          </div>
+
+                        <div className="activity-main">
+                          <h4 className="activity-name">{m.title}</h4>
+                          <p className="activity-meta">
+                            {m.host_name} · {formatMeetingTime(m.scheduled_at)}
+                            {m.duration_minutes ? ` · ${formatDuration(m.duration_minutes)}` : ""}
+                          </p>
                         </div>
-                        <span className={`activity-status ${getStatusClass(m.status)}`}>
+
+                        <span className={`status-pill ${getStatusClass(m.status)}`}>
                           {getStatusLabel(m.status)}
                         </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+
+                        <Link
+                          href={`/meeting/${m.meeting_id}`}
+                          className="activity-action-btn"
+                          id={`btn-join-activity-${m.id}`}
+                        >
+                          Join
+                        </Link>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 
