@@ -232,11 +232,14 @@ export default function MeetingPage() {
       }
     }
 
-    // Bug 2 Fix: auto-renegotiate when tracks are added late
+    // Bug 2 Fix: auto-renegotiate when tracks are added (with glare guard)
+    let isNegotiating = false;
     pc.onnegotiationneeded = async () => {
+      if (isNegotiating || pc.signalingState !== "stable") return;
       try {
-        if (pc.signalingState === "closed") return;
+        isNegotiating = true;
         const offer = await pc.createOffer();
+        if (pc.signalingState !== "stable") return; // recheck after async
         await pc.setLocalDescription(offer);
         sendSignal({
           type: "WEBRTC_OFFER",
@@ -245,7 +248,9 @@ export default function MeetingPage() {
           offer,
         });
       } catch (e) {
-        console.warn("Renegotiation failed", e);
+        console.warn("[onnegotiationneeded] failed", e);
+      } finally {
+        isNegotiating = false;
       }
     };
 
@@ -254,16 +259,22 @@ export default function MeetingPage() {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
         const knownScreenStreamId = screenShareStreamIds.current[peerName];
-
-        // Fallback 1: signaled streamId (most reliable)
-        // Fallback 2: contentHint/label
-        // Fallback 3: we already have a camera stream for this peer, so this must be screen
         const alreadyHasCameraStream = !!remoteStreamsRef.current[peerName];
+
         const isScreenTrack =
           (knownScreenStreamId ? stream.id === knownScreenStreamId : false) ||
           event.track.contentHint === "detail" ||
           /screen|window|tab/i.test(event.track.label) ||
           (event.track.kind === "video" && alreadyHasCameraStream && stream.id !== remoteStreamsRef.current[peerName]?.id);
+
+        console.log("[ontrack]", peerName, {
+          kind: event.track.kind,
+          contentHint: event.track.contentHint,
+          label: event.track.label,
+          streamId: stream.id,
+          knownScreenId: knownScreenStreamId,
+          isScreenTrack,
+        });
 
         if (isScreenTrack) {
           setRemoteScreenStreams((prev) => ({ ...prev, [peerName]: stream }));
@@ -533,35 +544,18 @@ export default function MeetingPage() {
       const screenTrack = stream.getVideoTracks()[0];
       screenTrack.contentHint = "detail";
 
-      // ── Broadcast stream ID FIRST so remote ontrack can identify this stream ──
+      // Broadcast stream ID FIRST so remote ontrack can reliably identify this stream
       sendSignal({ type: "SCREEN_SHARE_STARTED", sender: localName, streamId: stream.id });
 
-      // ── Add track + EXPLICITLY renegotiate for every peer (don't rely on onnegotiationneeded) ──
-      const peers = Object.entries(peerConnectionsRef.current);
-      for (const [peerName, pc] of peers) {
-        // Pause auto-negotiation so we control the offer timing
-        const savedHandler = pc.onnegotiationneeded;
-        (pc as any).onnegotiationneeded = null;
-
+      // Just addTrack — onnegotiationneeded fires automatically and sends the offer
+      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
         try {
           const sender = pc.addTrack(screenTrack, stream);
           screenSendersRef.current[peerName] = sender;
-        } catch (e) {}
-
-        // Only send offer if we're in stable state
-        if (pc.signalingState === "stable") {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            sendSignal({ type: "WEBRTC_OFFER", sender: localName, target: peerName, offer });
-          } catch (e) {
-            console.warn("Screen share renegotiation failed for", peerName, e);
-          }
+        } catch (e) {
+          console.warn("[screen share] addTrack failed for", peerName, e);
         }
-
-        // Restore auto-negotiation handler
-        (pc as any).onnegotiationneeded = savedHandler;
-      }
+      });
 
       // Auto-cleanup when user clicks browser "Stop sharing" button
       screenTrack.onended = () => {
