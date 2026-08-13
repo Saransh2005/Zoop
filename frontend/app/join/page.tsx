@@ -4,12 +4,53 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
+function formatMeetingIdInput(val: string): string {
+  // If user pasted a full meeting URL, extract meeting ID part
+  if (val.includes("/meeting/")) {
+    const parts = val.split("/meeting/");
+    val = parts[parts.length - 1];
+  }
+
+  // Extract digits (max 11 digits)
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+
+  if (digits.length <= 3) {
+    return digits;
+  }
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+  if (digits.length <= 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  // 11 digits: XXX-XXXX-XXXX
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 export default function JoinPage() {
   const router = useRouter();
   const [meetingId, setMeetingId] = useState("");
-  const [displayName, setDisplayName] = useState("Saransh Singh");
+  const [displayName, setDisplayName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("user");
+      if (cached) {
+        try {
+          const u = JSON.parse(cached);
+          if (u.full_name) return u.full_name;
+        } catch {}
+      }
+      return sessionStorage.getItem("displayName") || "";
+    }
+    return "";
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleMeetingIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatMeetingIdInput(e.target.value);
+    setMeetingId(formatted);
+  };
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,9 +96,9 @@ export default function JoinPage() {
               id="meeting-id-input"
               className="form-input form-input-large"
               type="text"
-              placeholder="000-0000-0000"
+              placeholder="321-412-412"
               value={meetingId}
-              onChange={(e) => setMeetingId(e.target.value)}
+              onChange={handleMeetingIdChange}
               autoFocus
             />
           </div>
