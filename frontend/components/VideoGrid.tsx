@@ -44,7 +44,6 @@ function VideoTile({ name, isHost, isMuted, isCameraOn = true, isLocal, stream, 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
@@ -68,7 +67,6 @@ function VideoTile({ name, isHost, isMuted, isCameraOn = true, isLocal, stream, 
           autoPlay
           playsInline
           muted={!!isLocal}
-          onLoadedMetadata={(e) => e.currentTarget.play().catch(() => {})}
           style={{
             width: "100%",
             height: "100%",
@@ -135,9 +133,8 @@ function ScreenSharePanel({ stream, presenterName }: { stream: MediaStream; pres
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
+    if (videoRef.current) {
       videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
@@ -157,7 +154,6 @@ function ScreenSharePanel({ stream, presenterName }: { stream: MediaStream; pres
         autoPlay
         playsInline
         muted={false}
-        onLoadedMetadata={(e) => e.currentTarget.play().catch(() => {})}
         style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
       />
       {/* Presenter badge */}

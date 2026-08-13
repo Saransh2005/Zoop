@@ -5,7 +5,7 @@ import VideoGrid from "@/components/VideoGrid";
 import MeetingControls from "@/components/MeetingControls";
 import { api, Meeting, Participant } from "@/lib/api";
 
-const DEFAULT_HOST = "Guest";
+const DEFAULT_HOST = "Saransh Singh";
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -117,7 +117,7 @@ export default function MeetingPage() {
         try {
           const u = JSON.parse(cached);
           return u.full_name || DEFAULT_HOST;
-        } catch {}
+        } catch { }
       }
       return sessionStorage.getItem("displayName") || DEFAULT_HOST;
     }
@@ -170,12 +170,12 @@ export default function MeetingPage() {
       if (existingSender) {
         // Replace even if sender exists — the old track may be stopped
         if (existingSender.track !== track) {
-          existingSender.replaceTrack(track).catch(() => {});
+          existingSender.replaceTrack(track).catch(() => { });
         }
       } else {
         try {
           pc.addTrack(track, localStreamRef.current!);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
   }, []);
@@ -259,14 +259,13 @@ export default function MeetingPage() {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
         const knownScreenStreamId = screenShareStreamIds.current[peerName];
-        const existingCameraStream = remoteStreamsRef.current[peerName];
-        const hasCameraVideo = !!(existingCameraStream && existingCameraStream.getVideoTracks().length > 0);
+        const alreadyHasCameraStream = !!remoteStreamsRef.current[peerName];
 
         const isScreenTrack =
           (knownScreenStreamId ? stream.id === knownScreenStreamId : false) ||
           event.track.contentHint === "detail" ||
           /screen|window|tab/i.test(event.track.label) ||
-          (event.track.kind === "video" && hasCameraVideo && stream.id !== existingCameraStream?.id);
+          (event.track.kind === "video" && alreadyHasCameraStream && stream.id !== remoteStreamsRef.current[peerName]?.id);
 
         console.log("[ontrack]", peerName, {
           kind: event.track.kind,
@@ -274,7 +273,6 @@ export default function MeetingPage() {
           label: event.track.label,
           streamId: stream.id,
           knownScreenId: knownScreenStreamId,
-          hasCameraVideo,
           isScreenTrack,
         });
 
@@ -334,7 +332,7 @@ export default function MeetingPage() {
       for (const cand of pending) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(cand));
-        } catch (e) {}
+        } catch (e) { }
       }
       pendingIceCandidatesRef.current[data.sender] = [];
 
@@ -356,7 +354,7 @@ export default function MeetingPage() {
         for (const cand of pending) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(cand));
-          } catch (e) {}
+          } catch (e) { }
         }
         pendingIceCandidatesRef.current[data.sender] = [];
       }
@@ -365,7 +363,7 @@ export default function MeetingPage() {
       if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {}
+        } catch (e) { }
       } else {
         if (!pendingIceCandidatesRef.current[data.sender]) {
           pendingIceCandidatesRef.current[data.sender] = [];
@@ -375,7 +373,7 @@ export default function MeetingPage() {
     } else if (data.type === "CHAT_MSG") {
       setChatMessages((prev) => [...prev, data.payload]);
     } else if (data.type === "PARTICIPANTS_UPDATE") {
-      api.getParticipants(meetingId).then(setParticipants).catch(() => {});
+      api.getParticipants(meetingId).then(setParticipants).catch(() => { });
     } else if (data.type === "SCREEN_SHARE_STARTED") {
       // Store stream ID so ontrack can reliably identify screen tracks from this peer
       screenShareStreamIds.current[data.sender] = data.streamId;
@@ -406,7 +404,7 @@ export default function MeetingPage() {
       try {
         const data = JSON.parse(event.data);
         handleSignal(data);
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const rawApi = process.env.NEXT_PUBLIC_API_URL || "https://zoop-t1l7.onrender.com";
@@ -420,7 +418,7 @@ export default function MeetingPage() {
       try {
         const data = JSON.parse(event.data);
         handleSignal(data);
-      } catch (e) {}
+      } catch (e) { }
     };
 
     return () => {
@@ -524,7 +522,7 @@ export default function MeetingPage() {
       Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
         const sender = screenSendersRef.current[peerName];
         if (sender) {
-          try { pc.removeTrack(sender); } catch (e) {}
+          try { pc.removeTrack(sender); } catch (e) { }
           delete screenSendersRef.current[peerName];
         }
       });
@@ -565,7 +563,7 @@ export default function MeetingPage() {
         Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
           const sender = screenSendersRef.current[peerName];
           if (sender) {
-            try { pc.removeTrack(sender); } catch (e) {}
+            try { pc.removeTrack(sender); } catch (e) { }
             delete screenSendersRef.current[peerName];
           }
         });
@@ -618,7 +616,7 @@ export default function MeetingPage() {
       try {
         const ps = await api.getParticipants(meetingId);
         setParticipants(ps);
-      } catch {}
+      } catch { }
     }, 5000);
     return () => clearInterval(id);
   }, [meetingId]);
@@ -641,7 +639,7 @@ export default function MeetingPage() {
         await api.leaveMeeting(meetingId, participantId);
       }
       await api.endMeeting(meetingId);
-    } catch {}
+    } catch { }
     router.push("/");
   };
 

@@ -16,23 +16,11 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<{ meetingId: string; link: string } | null>(null);
-  const [userName, setUserName] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("user");
-      if (cached) {
-        try { return JSON.parse(cached).full_name || "Host"; } catch {}
-      }
-    }
-    return "Host";
-  });
+
+  const previewLink = `http://localhost:3000/meeting/preview`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
     if (!title.trim()) { setError("Meeting title is required."); return; }
     if (!date || !time) { setError("Please select a date and time."); return; }
 
@@ -43,7 +31,7 @@ export default function SchedulePage() {
       const meeting = await api.scheduleMeeting({
         title: title.trim(),
         description: description.trim() || undefined,
-        host_name: userName,
+        host_name: "Saransh Singh",
         scheduled_at: scheduledAt,
         duration_minutes: duration,
       });
