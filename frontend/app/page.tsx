@@ -201,7 +201,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="profile-info">
-                <h1 className="profile-name">{user ? user.full_name : "Welcome to Zoom"}</h1>
+                <h1 className="profile-name">{user ? user.full_name : "Welcome to Zoop"}</h1>
                 <p className="profile-plan">
                   {user ? user.email : "Sign in or create a free account to access your personal meeting ID"}
                 </p>
@@ -304,10 +304,10 @@ export default function Dashboard() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                     </svg>
-                    Zoom Workplace Pro
+                    Zoop Workplace Pro
                   </div>
                   <div className="upgrade-title">Upgrade and save!</div>
-                  <div className="upgrade-sub">Unlock up to 16% when you select an annual Zoom Workplace Pro plan.</div>
+                  <div className="upgrade-sub">Unlock up to 16% when you select an annual Zoop Workplace Pro plan.</div>
                   <button className="upgrade-btn" id="btn-upgrade">Upgrade today</button>
                 </div>
               </div>

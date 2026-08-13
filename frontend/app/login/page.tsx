@@ -42,7 +42,7 @@ export default function LoginPage() {
               <path d="M10 15h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="white" />
               <path d="M26 17.5l6-3v11l-6-3v-5z" fill="white" />
             </svg>
-            <span className="join-logo-text">Zoom</span>
+            <span className="join-logo-text">Zoop</span>
           </div>
           <h1 className="join-title">Sign In</h1>
           <p className="join-sub">Access your personal meeting ID &amp; dashboard</p>

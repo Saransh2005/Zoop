@@ -4,10 +4,10 @@ import Footer from "@/components/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Zoom — Video Conferencing and Web Conferencing Service",
+  title: "Zoop — Video Conferencing & Real-Time Meetings",
   description:
-    "Zoom is the leader in modern enterprise video communications, with an easy, reliable cloud platform for video and audio conferencing, chat, and webinars.",
-  keywords: "zoom, video conferencing, meetings, webinars, online collaboration",
+    "Zoop provides secure, high-definition video conferencing, screen sharing, and real-time collaboration.",
+  keywords: "zoop, video conferencing, meetings, webinars, online collaboration",
 };
 
 export default function RootLayout({

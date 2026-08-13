@@ -704,7 +704,7 @@ export default function MeetingPage() {
               <path d="M10 15h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="white" />
               <path d="M26 17.5l6-3v11l-6-3v-5z" fill="white" />
             </svg>
-            <span>Zoom</span>
+            <span>Zoop</span>
           </div>
           <span style={{ color: "var(--border)" }}>|</span>
           <span className="meeting-topic">{meeting.title}</span>
