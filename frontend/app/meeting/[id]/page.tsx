@@ -150,6 +150,7 @@ export default function MeetingPage() {
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
   const screenSendersRef = useRef<Record<string, RTCRtpSender>>({});
   const screenShareStreamIds = useRef<Record<string, string>>({}); // peerName → screen streamId
+  const remoteStreamsRef = useRef<Record<string, MediaStream>>({}); // mirror of remoteStreams state
   const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -248,14 +249,21 @@ export default function MeetingPage() {
       }
     };
 
-    // Handle remote track arrival — use signaled streamId for reliable screen share detection
+    // Handle remote track arrival — multi-fallback screen share detection
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
         const knownScreenStreamId = screenShareStreamIds.current[peerName];
-        const isScreenTrack = knownScreenStreamId
-          ? stream.id === knownScreenStreamId
-          : event.track.contentHint === "detail" || /screen|window|tab/i.test(event.track.label);
+
+        // Fallback 1: signaled streamId (most reliable)
+        // Fallback 2: contentHint/label
+        // Fallback 3: we already have a camera stream for this peer, so this must be screen
+        const alreadyHasCameraStream = !!remoteStreamsRef.current[peerName];
+        const isScreenTrack =
+          (knownScreenStreamId ? stream.id === knownScreenStreamId : false) ||
+          event.track.contentHint === "detail" ||
+          /screen|window|tab/i.test(event.track.label) ||
+          (event.track.kind === "video" && alreadyHasCameraStream && stream.id !== remoteStreamsRef.current[peerName]?.id);
 
         if (isScreenTrack) {
           setRemoteScreenStreams((prev) => ({ ...prev, [peerName]: stream }));
@@ -267,6 +275,7 @@ export default function MeetingPage() {
             });
           };
         } else {
+          remoteStreamsRef.current[peerName] = stream;
           setRemoteStreams((prev) => ({ ...prev, [peerName]: stream }));
         }
       }
@@ -495,12 +504,10 @@ export default function MeetingPage() {
     }
   };
 
-  // ─── Real Screen Sharing ──────────────────────────────────────────────────
+  // ─── Real Screen Sharing ────────────────────────────────────────────────
   const handleShareScreen = async () => {
     if (screenStream) {
-      // Signal stop BEFORE removing tracks
       sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
-      // Stop sharing: remove screen track from every peer connection
       Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
         const sender = screenSendersRef.current[peerName];
         if (sender) {
@@ -524,20 +531,39 @@ export default function MeetingPage() {
       showToast("Screen sharing started!");
 
       const screenTrack = stream.getVideoTracks()[0];
-      screenTrack.contentHint = "detail"; // fallback hint
+      screenTrack.contentHint = "detail";
 
-      // Signal BEFORE adding track so remote ontrack can match stream.id reliably
+      // ── Broadcast stream ID FIRST so remote ontrack can identify this stream ──
       sendSignal({ type: "SCREEN_SHARE_STARTED", sender: localName, streamId: stream.id });
 
-      // Add screen track to ALL existing peer connections
-      Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
+      // ── Add track + EXPLICITLY renegotiate for every peer (don't rely on onnegotiationneeded) ──
+      const peers = Object.entries(peerConnectionsRef.current);
+      for (const [peerName, pc] of peers) {
+        // Pause auto-negotiation so we control the offer timing
+        const savedHandler = pc.onnegotiationneeded;
+        (pc as any).onnegotiationneeded = null;
+
         try {
-          const sender = pc.addTrack(screenTrack, stream); // triggers onnegotiationneeded
+          const sender = pc.addTrack(screenTrack, stream);
           screenSendersRef.current[peerName] = sender;
         } catch (e) {}
-      });
 
-      // Auto-cleanup when user clicks browser's "Stop sharing" button
+        // Only send offer if we're in stable state
+        if (pc.signalingState === "stable") {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal({ type: "WEBRTC_OFFER", sender: localName, target: peerName, offer });
+          } catch (e) {
+            console.warn("Screen share renegotiation failed for", peerName, e);
+          }
+        }
+
+        // Restore auto-negotiation handler
+        (pc as any).onnegotiationneeded = savedHandler;
+      }
+
+      // Auto-cleanup when user clicks browser "Stop sharing" button
       screenTrack.onended = () => {
         sendSignal({ type: "SCREEN_SHARE_STOPPED", sender: localName });
         Object.entries(peerConnectionsRef.current).forEach(([peerName, pc]) => {
