@@ -59,8 +59,21 @@ export default function Dashboard() {
       return;
     }
 
+    // Load cached user session immediately so UI renders instantly
+    let hasCached = false;
     if (cached) {
-      try { setUser(JSON.parse(cached)); } catch {}
+      try {
+        const u = JSON.parse(cached);
+        if (u && u.full_name) {
+          setUser(u);
+          setLoading(false);
+          hasCached = true;
+        }
+      } catch {}
+    }
+
+    if (hasCached) {
+      fetchData();
     }
 
     // Verify token with backend
@@ -68,12 +81,25 @@ export default function Dashboard() {
       .then((u) => {
         setUser(u);
         localStorage.setItem("user", JSON.stringify(u));
-        fetchData();
+        setLoading(false);
+        if (!hasCached) {
+          fetchData();
+        }
       })
-      .catch(() => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        router.push("/login");
+      .catch((err) => {
+        // Only redirect to login if token is explicitly unauthorized (401)
+        const isAuthError = err instanceof Error && (err.message.includes("401") || err.message.toLowerCase().includes("unauthorized") || err.message.toLowerCase().includes("not authenticated"));
+        if (isAuthError) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          router.push("/login");
+        } else {
+          // On network blip or backend wake-up, keep cached user session
+          setLoading(false);
+          if (!hasCached) {
+            fetchData();
+          }
+        }
       });
   }, [router, fetchData]);
 
@@ -87,7 +113,7 @@ export default function Dashboard() {
   }
 
   const hostName = user.full_name;
-  const pmi = user.personal_meeting_id;
+  const pmi = user.personal_meeting_id || "000-000-0000";
 
   const handleNewMeeting = async () => {
     setCreating(true);
