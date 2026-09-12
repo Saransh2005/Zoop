@@ -60,6 +60,21 @@ The frontend will be available at **http://localhost:3000**
 
 ---
 
+### 3. Mobile App Setup (React Native / Expo)
+
+```bash
+cd mobile
+
+# Install dependencies
+npm install
+
+# Start the Expo development server
+npx expo start
+```
+
+Scan the terminal QR code using the **Expo Go** app on your iOS or Android device.
+
+
 ## ✅ Features
 
 ### Core (Required)

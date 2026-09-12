@@ -215,7 +215,7 @@ def join_meeting(meeting_id: str, payload: JoinMeetingRequest, db: Session = Dep
     )
 
 
-# ─── POST /{meeting_id}/leave ─────────────────────────────────────────────────
+# ─── POST /{meeting_id}/leave ────────────────────────────────────────────────
 
 @router.post("/{meeting_id}/leave")
 def leave_meeting(meeting_id: str, participant_id: int, db: Session = Depends(get_db)):
